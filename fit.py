@@ -10,6 +10,7 @@ import sys
 import scipy
 
 def get_xy(xfile,yfile): 
+    pdb.set_trace()
     ydf = pd.read_parquet(yfile,engine='pyarrow')
     if ',' not in xfile:
         xdf = pd.read_parquet(xfile,engine='pyarrow')
@@ -23,7 +24,10 @@ def get_xy(xfile,yfile):
 
 def get_testx(test_fname,num_annots):
     if ',' not in test_fname:
-        xtestdf = pd.read_parquet(test_fname,engine='pyarrow')
+        if 'parquet' in test_fname:
+            xtestdf = pd.read_parquet(test_fname,engine='pyarrow')
+        else:
+            xtestdf = pd.read_csv(test_fname,delim_whitespace=True)
         xtest = xtestdf.iloc[:,-int(num_annots):].values
     else:
         fnames = test_fname.split(',')
@@ -81,7 +85,7 @@ def logistic(x,y):
 
 def logistic_multi(x,y):
     print("Fitting logistic regression for multi class.")
-    logistic_model = linear_model.LogisticRegression(class_weight='balanced',multi_class='multinomial',solver='sag')
+    logistic_model = linear_model.LogisticRegression(class_weight='balanced',multi_class='multinomial',solver='saga')
     est = logistic_model.fit(x,y)
     return est
     

@@ -77,7 +77,7 @@ def run_pipeline(xtrain_prefix,ytrain_prefix,xtrain_suffix,ytrain_suffix,xtest_b
             predf.to_csv(ypred_fname,sep='\t',index=False)
     return
       
-def binpred_cv(xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,col_name,num_annots,num_bins,pred_chrom,output_prefix,recompute):
+def binpred_cv(xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,col_name,num_annots,num_bins,pred_chrom,output_prefix,method,recompute):
     '''
     The 'cv' in the name of this function is a misnomer, because we are not doing any kind of cross validation.
     However, the flavor of this method is kind of like the flavor of cross-validation, in the sense that we are picking 
@@ -97,7 +97,7 @@ def binpred_cv(xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,xtest_pre
     trainy_fname = fname+'trainy.tmp.parquet'
     if not all([os.path.isfile(f) for f in [trainx_fname,trainy_fname]]):
         print('Concatenating training data')
-        xdf,ydf = concat_training(trainx_fname,trainy_fname,xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,pred_chrom)
+        xdf,ydf = concat_training(trainx_fname,trainy_fname,xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,pred_chrom,recompute)
         xdf.to_parquet(trainx_fname,engine='pyarrow')
         ydf.to_parquet(trainy_fname,engine='pyarrow')
     else:
@@ -113,7 +113,7 @@ def binpred_cv(xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,xtest_pre
             ybinpreddf = pd.read_csv(ybinpred_fname,delim_whitespace=True)
             binned_prediction = ybinpreddf[pred_chrom+'_binpred'].values
         else:
-            binned_prediction = binpred_single(xdf,ydf,i,pred_chrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,output_prefix,num_bins,num_annots,col_name)
+            binned_prediction = binpred_single(xdf,ydf,i,pred_chrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,output_prefix,num_bins,num_annots,col_name,method)
         if binned_prediction is None:
             continue
         else:
@@ -152,7 +152,7 @@ def binpred_eo(xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,xtest_pre
     xdf = pd.read_parquet(xtrain_prefix+pred_chrom+'.'+xtrain_suffix,engine='pyarrow')
     ydf = pd.read_parquet(ytrain_prefix+pred_chrom+'.'+ytrain_suffix,engine='pyarrow')
     train_chroms,bin_chroms = get_train_bin_chroms(pred_chrom,train_eo)
-    binned_prediction = binpred_single(xdf,ydf,bin_chroms,pred_chrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,output_prefix,num_bins,num_annots,col_name)
+    binned_prediction = binpred_single(xdf,ydf,bin_chroms,pred_chrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,output_prefix,num_bins,num_annots,col_name,method)
     if binned_prediction is None:
         print('Failed to compute binned prediction. Likely due to no SNPs in binning chromosomes')
     else:
@@ -188,7 +188,7 @@ def get_train_bin_chroms(pred_chrom,train_eo):
         return
     
 
-def binpred_single(xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,output_prefix,num_bins,num_annots,col_name):
+def binpred_single(xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,output_prefix,num_bins,num_annots,col_name,method):
     '''
     This function computes the binned prediction on the chromosome of interest
 
@@ -198,30 +198,35 @@ def binpred_single(xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_pr
     predchrom is the chromosome of interest
 
     col_name is usually pip
+
+    method currently support OLS, Logistic
     '''
-    if len(binchrom)>1:
+    if type(binchrom)==list:
         if binchrom[0]%2==0:
             fname_nobin = output_prefix+'_bineven_pred'+str(predchrom)+'.'
         else:
             fname_nobin = output_prefix+'_binodd_pred'+str(predchrom)+'.'
     else:
         fname_nobin = output_prefix+'_bin'+str(binchrom)+'_pred'+str(predchrom)+'.'
-    if os.path.isfile(fname_nobin+'coef'):
+    if os.path.isfile(fname_nobin+'coef') and method=='OLS':
         fitted_coefs = pd.read_csv(fname_nobin+'coef',delim_whitespace=True).values
     else:
-        fitted_coefs = fit_ols(xdf,ydf,binchrom,num_annots,col_name)
-        coefdf = pd.DataFrame(data=fitted_coefs,columns=['COEF'])
-        coefdf.to_csv(fname_nobin+'coef',sep='\t',index=False)
+        if method == 'OLS':
+            fitted_coefs = fit_ols(xdf,ydf,binchrom,num_annots,col_name)
+            coefdf = pd.DataFrame(data=fitted_coefs,columns=['COEF'])
+            coefdf.to_csv(fname_nobin+'coef',sep='\t',index=False)
+        elif method == 'Logistic':
+            fitted_coefs = fit_logistic(xdf,ydf,binchrom,num_annots,col_name)
     ypred_fnames = [fname_nobin+'binchrom.ypred',fname_nobin+str(predchrom)+'.ypred']
     if not all([os.path.isfile(f) for f in ypred_fnames]):
-        yhat_bindf,yhat_preddf = ols_pred(fitted_coefs,xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,num_annots,ypred_fnames)
+        yhat_bindf,yhat_preddf = pred(fitted_coefs,xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,num_annots,ypred_fnames,method)
     else:
         yhat_bindf,yhat_preddf = [pd.read_csv(f,delim_whitespace=True) for f in ypred_fnames]
     if yhat_bindf is None:
         return None
     else:
         scaledyhat_bin = min_max_scale(yhat_bindf['YPRED'].values)
-        if len(binchrom)>1:
+        if type(binchrom)==list:
             yhat_bindf['scaledyhat_bin'] = scaledyhat_bin
         else:
             yhat_bindf[binchrom] = scaledyhat_bin
@@ -242,15 +247,32 @@ def binpred_single(xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_pr
             yhat_preddf.to_csv(fname+'ybinpred',sep='\t',index=False)
         return yhat_preddf[predchrom+'_binpred'].values
         
+def ypred_to_binpred(ypred_file, cutoff_file,predinbin_file):
+    '''
+    This function assign binned prediction to SNPs in ypred_file
+    
+    ypred_file should have columns: 'CHR','BP','SNP','CM','YPRED'
+    cutoff_file has column: 'CUTOFF'
+    predinbin_file has column: 'BIN_PRED'
+    '''
+    predf = pd.read_csv(ypred_file,delim_whitespace=True)
+    cutoffs = pd.read_csv(cutoff_file,delim_whitespace=True)['CUTOFF'].tolist()
+    predinbin = pd.read_csv(predinbin_file,delim_whitespace=True)['BIN_PRED'].tolist()
+    return
+    
 
-
-def ols_pred(fitted_coefs,xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,num_annots,ypred_fnames):
-    xbindf = xdf[xdf['CHR'].isin(binchrom)]
+def pred(fitted_coefs,xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,ytest_prefix,ytest_suffix,num_annots,ypred_fnames,method):
+    if type(binchrom)==list:
+        xbindf = xdf[xdf['CHR'].isin(binchrom)]
+    else:
+        xbindf = xdf[xdf['CHR']==binchrom]
     if xbindf.empty:
         return [None,None]
     else:
         if xtest_suffix=='parquet':
             xpreddf = pd.read_parquet(xtest_prefix+predchrom+'.'+xtest_suffix,engine='pyarrow')
+        else:
+            xpreddf = pd.read_csv(xtest_prefix+predchrom+'.'+xtest_suffix,delim_whitespace=True)
         xtests = [xbindf,xpreddf]
         ypreds = []
         for i in range(2):
@@ -259,9 +281,15 @@ def ols_pred(fitted_coefs,xdf,ydf,binchrom,predchrom,xtest_prefix,xtest_suffix,y
                 ypred = pd.read_csv(ypred_fname,delim_whitespace=True)
             else:
                 num_annots = int(num_annots)
-                ypred_array = xtests[i].iloc[:,-num_annots:].values.dot(fitted_coefs)
+                if method == 'OLS':
+                    ypred_array = xtests[i].iloc[:,-num_annots:].values.dot(fitted_coefs)
+                elif method == 'Logistic':
+                    ypred_array = fitted_coefs.predict_proba(xtests[i].iloc[:,-num_annots:].values)[:,1]
                 if i == 0:
-                    ypred = ydf[ydf['CHR'].isin(binchrom)].copy()
+                    if type(binchrom) == list:
+                        ypred = ydf[ydf['CHR'].isin(binchrom)].copy()
+                    else:
+                        ypred = ydf[ydf['CHR']==binchrom].copy()
                 else:
                     ypred = pd.read_parquet(ytest_prefix+str(predchrom)+'.'+ytest_suffix,engine='pyarrow')
                 ypred['YPRED'] = ypred_array
@@ -284,10 +312,17 @@ def fit_ols(xdf,ydf,exclude_chrom,num_annots,col_name):
     fitted_coefs = ols(x,y)
     return fitted_coefs
 
+def fit_logistic(xdf,ydf,exclude_chrom,num_annots,col_name):
+    print('Fitting model leaving out binning chromosome '+str(exclude_chrom))
+    x,y = get_xy(xdf,ydf,exclude_chrom,num_annots,col_name)
+    logistic_model = linear_model.LogisticRegression(max_iter=200,class_weight='balanced',multi_class='multinomial',solver='saga')
+    est = logistic_model.fit(x,y)
+    return est
+
 def get_xy(xdf,ydf,exclude_chrom,num_annots,col_name):
     print('Getting the training data leaving out binning chromosome '+str(exclude_chrom))
     num_annots = int(num_annots)
-    if len(exclude_chrom) > 1:
+    if type(exclude_chrom)==list:
         trainx = xdf[~xdf['CHR'].isin(exclude_chrom)].iloc[:,-num_annots:].values
         trainy = ydf[~ydf['CHR'].isin(exclude_chrom)][col_name].values
     else:
@@ -301,7 +336,7 @@ def ols(x,y):
     ols_model.fit(x,y)
     return ols_model.coef_.ravel()
 
-def concat_training(trainx_fname,trainy_fname,xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,pred_chrom):
+def concat_training(trainx_fname,trainy_fname,xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,pred_chrom,recompute):
     '''
     Concatenate training files
     
@@ -340,7 +375,7 @@ def get_bin_pred(bindf,bin_chrom,num_bins,col_name,binning_method):
     bin_pred: list of length num_bins with the proper prediction for each bin from small to large
     cutoffs: the bin cutoffs from small to large, always start with 0.0 and ends with 1.0
     '''
-    if len(bin_chrom)>1:
+    if type(bin_chrom)==list:
         bin_chrom = 'scaledyhat_bin'
     if binning_method == 'equally-spaced':
         cutoffs = [float(i)/num_bins for i in range(num_bins+1)]
@@ -434,7 +469,6 @@ if __name__=='__main__':
     parser.add_argument('--pred-chrom',help='Chromosome on which we want prediction.')
     parser.add_argument('--bin-chrom',help='Chromosome number on which we create bins and final predictions for those bins.')
     parser.add_argument('--num-annots',help='Number of annotations in file. If there are multiple files, use comma as delimiter')
-    parser.add_argument('--method',help='Fitting method: OLS, Lasso, Tree, GBT, RF, Logit, Logistic')
     parser.add_argument('--col-name',help='Column name of target values')
     parser.add_argument('--num-bins',type=int,help='Number of bins')
     parser.add_argument('--binning-method',help='Currently taking values equally-spaced or equally-sized')
@@ -442,11 +476,12 @@ if __name__=='__main__':
     parser.add_argument('--mean-binpred',action='store_true')
     parser.add_argument('--single-binchrom',action='store_true',help='Oldest method, binning only using one specified chromosome')
     parser.add_argument('--train-eo',help='Specify even or odd chromosome for training')
+    parser.add_argument('--method',help='Currently support OLS, Logistic')
     args = parser.parse_args()
 
     if args.single_binchrom:
         run_pipeline(args.xtrain_prefix,args.ytrain_prefix,args.xtrain_suffix,args.ytrain_suffix,args.xtest_bin_prefix,args.xtest_bin_suffix,args.xtest_pred_prefix,args.xtest_pred_suffix,args.ytest_bin_prefix,args.ytest_bin_suffix,args.ytest_pred_prefix,args.ytest_pred_suffix,args.col_name,args.output_prefix,args.pred_chrom,args.bin_chrom,args.num_annots,args.method,args.num_bins,args.binning_method,args.recompute)
     elif args.mean_binpred:
-        binpred_cv(args.xtrain_prefix,args.xtrain_suffix,args.ytrain_prefix,args.ytrain_suffix,args.xtest_prefix,args.xtest_suffix,args.ytest_prefix,args.ytest_suffix,args.col_name,args.num_annots,args.num_bins,args.pred_chrom,args.output_prefix,args.recompute)
+        binpred_cv(args.xtrain_prefix,args.xtrain_suffix,args.ytrain_prefix,args.ytrain_suffix,args.xtest_prefix,args.xtest_suffix,args.ytest_prefix,args.ytest_suffix,args.col_name,args.num_annots,args.num_bins,args.pred_chrom,args.output_prefix,args.method,args.recompute)
     elif args.train_eo:
         binpred_eo(args.xtrain_prefix,args.xtrain_suffix,args.ytrain_prefix,args.ytrain_suffix,args.xtest_prefix,args.xtest_suffix,args.ytest_prefix,args.ytest_suffix,args.col_name,args.num_annots,args.num_bins,args.pred_chrom,args.output_prefix,args.train_eo,args.recompute)

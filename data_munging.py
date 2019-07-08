@@ -3,6 +3,7 @@ import numpy as np
 import pdb
 import argparse
 import os
+import sys
 
 def chr_sep(finemap_parquet_file,out_prefix):
     '''
@@ -21,7 +22,7 @@ def chr_sep(finemap_parquet_file,out_prefix):
         print('Finished seperating out chromosome '+str(i))
     return
 
-def match_snps(target_prefix,annot_prefix,annot_ref_prefix,target_output_prefix,annot_output_prefix,col_name,recompute):
+def match_snps(target_prefix,annot_prefix,annot_suffix,annot_ref_prefix,target_output_prefix,annot_output_prefix,col_name,chrom,recompute):
     '''
     Merge target dataframe with annotation dataframe on 'SNP' column.
     Assuming target data format to be .parquet, and annotation data format
@@ -44,42 +45,44 @@ def match_snps(target_prefix,annot_prefix,annot_ref_prefix,target_output_prefix,
 
     Resulting files will have matching SNPs with same SNP info as in annot.gz files.
     '''
-    for i in range(1,23):
-        chrom = str(i)
-        print('Processing chromosome '+chrom)
-        if os.path.isfile(target_output_prefix+chrom+'.parquet') and os.path.isfile(annot_output_prefix+chrom+'.parquet') and not recompute:
-            print('Data already merged')
-            continue
-        yfile = target_prefix+chrom+'.parquet'
-        xfile = annot_prefix+chrom+'.parquet'
-        ydf = pd.read_parquet(yfile,engine='pyarrow')
-        #ydf.drop_duplicates(inplace=True)
-        if annot_ref_prefix is not None:
-            adf = pd.read_csv(xfile,delim_whitespace=True,header=None)
-            rsdf = pd.read_csv(annot_ref_prefix+chrom,delim_whitespace=True)[['CHR','BP','SNP','CM']]
-            xdf = pd.concat([rsdf,adf],axis=1)
-        else:
+    chrom = str(chrom)
+    print('Processing chromosome '+chrom)
+    if os.path.isfile(target_output_prefix+chrom+'.parquet') and os.path.isfile(annot_output_prefix+chrom+'.parquet') and not recompute:
+        print('Data already merged')
+        sys.exit()
+    yfile = target_prefix+chrom+'.parquet'
+    xfile = annot_prefix+chrom+'.'+annot_suffix
+    ydf = pd.read_parquet(yfile,engine='pyarrow')
+    #ydf.drop_duplicates(inplace=True)
+    if annot_ref_prefix is not None:
+        adf = pd.read_csv(xfile,delim_whitespace=True,header=None)
+        rsdf = pd.read_csv(annot_ref_prefix+chrom,delim_whitespace=True)[['CHR','BP','SNP','CM']]
+        xdf = pd.concat([rsdf,adf],axis=1)
+    else:
+        if 'parquet' in xfile:
             xdf = pd.read_parquet(xfile,engine='pyarrow')
-        #xdf.drop_duplicates(inplace=True)
-        merged = pd.merge(ydf[['SNP',col_name]],xdf,on=['SNP'])
-        M = merged.shape[0]
-        print('After merging, '+str(M)+' SNPs remain')
-        if not os.path.isfile(target_output_prefix+chrom+'.parquet') or recompute:
-            ymerged = merged[['CHR','BP','SNP','CM',col_name]]
-            ymerged.to_parquet(target_output_prefix+chrom+'.parquet',engine='pyarrow')
         else:
-            print('Merged target file exists at location '+target_output_prefix+chrom+'.parquet')
-        if not os.path.isfile(annot_output_prefix+chrom+'.parquet') or recompute:
-            xmerged = merged.drop([col_name],axis=1)
-            xmerged.columns = xmerged.columns.astype(str)
-            xmerged.to_parquet(annot_output_prefix+chrom+'.parquet',engine='pyarrow')
-        else:
-            print('Merged annotation file exists at location '+annot_output_prefix+chrom+'.parquet')
+            xdf = pd.read_csv(xfile,delim_whitespace=True)
+    #xdf.drop_duplicates(inplace=True)
+    merged = pd.merge(ydf[['SNP',col_name]],xdf,on=['SNP'])
+    M = merged.shape[0]
+    print('After merging, '+str(M)+' SNPs remain')
+    if not os.path.isfile(target_output_prefix+chrom+'.parquet') or recompute:
+        ymerged = merged[['CHR','BP','SNP','CM',col_name]]
+        ymerged.to_parquet(target_output_prefix+chrom+'.parquet',engine='pyarrow')
+    else:
+        print('Merged target file exists at location '+target_output_prefix+chrom+'.parquet')
+    if not os.path.isfile(annot_output_prefix+chrom+'.parquet') or recompute:
+        xmerged = merged.drop([col_name],axis=1)
+        xmerged.columns = xmerged.columns.astype(str)
+        xmerged.to_parquet(annot_output_prefix+chrom+'.parquet',engine='pyarrow')
+    else:
+        print('Merged annotation file exists at location '+annot_output_prefix+chrom+'.parquet')
     return
 
-def leave_one_out(target_prefix,annot_prefix,target_output_prefix,annot_output_prefix,col_name,num_annots,recompute):
+def leave_one_out(target_prefix,annot_prefix,target_output_prefix,annot_output_prefix,col_name,num_annots,recompute,keep_info):
     '''
-    Leaving out one chromosome and create regression data without SNP info columns.
+    Leaving out one chromosome and create regression data without SNP info columns (as default). If keep_info flag is on, then keep the SNP info
 
     Target files are of the form: target_prefix.CHROM.parquet
     Annotation files are of the form: annot_prefix.CHROM.parquet, annotation data must be to the right of SNP info columns.
@@ -97,11 +100,11 @@ def leave_one_out(target_prefix,annot_prefix,target_output_prefix,annot_output_p
         print('Reading in target files')
         yfiles = [target_prefix+str(i)+'.parquet' for i in range(1,23)]
         ydfs = [pd.read_parquet(f,engine='pyarrow') for f in yfiles]
-        ydf = pd.concat(ydfs)
+        ydf = pd.concat(ydfs,axis=0,sort=False)
         print('Reading in annotation files')
         xfiles = [annot_prefix+str(i)+'.parquet' for i in range(1,23)]
         xdfs = [pd.read_parquet(f,engine='pyarrow') for f in xfiles]
-        xdf = pd.concat(xdfs)
+        xdf = pd.concat(xdfs,axis=0,sort=False)
         for i in range(1,23):
             chrom = str(i)
             if os.path.isfile(target_output_prefix+chrom+'.parquet') and not recompute:
@@ -111,8 +114,11 @@ def leave_one_out(target_prefix,annot_prefix,target_output_prefix,annot_output_p
                 ychrdf = ydf[ydf['CHR']!=i]
                 M = ychrdf.shape[0]
                 print('After leaving out chromosome '+chrom+', '+str(M)+' SNPs remain in target data.')
-                targetdf = ychrdf[[col_name]]    
-                targetdf.to_parquet(target_output_prefix+chrom+'.parquet',engine='pyarrow')
+                if keep_info:
+                    ychrdf.to_parquet(target_output_prefix+chrom+'.parquet',engine='pyarrow')
+                else:
+                    targetdf = ychrdf[[col_name]]    
+                    targetdf.to_parquet(target_output_prefix+chrom+'.parquet',engine='pyarrow')
             if os.path.isfile(annot_output_prefix+chrom+'.parquet') and not recompute:
                 print('Annotation file already exists at '+annot_output_prefix+chrom+'.parquet')
             else:
@@ -120,8 +126,11 @@ def leave_one_out(target_prefix,annot_prefix,target_output_prefix,annot_output_p
                 xchrdf = xdf[xdf['CHR']!=i]
                 M = xchrdf.shape[0]
                 print('After leaving out chromosome '+chrom+', '+str(M)+' SNPs remain in annotation data')
-                annotdf = xchrdf.iloc[:,-num_annots:]
-                annotdf.to_parquet(annot_output_prefix+chrom+'.parquet',engine='pyarrow')
+                if keep_info:
+                    xchrdf.to_parquet(annot_output_prefix+chrom+'.parquet',engine='pyarrow')
+                else:
+                    annotdf = xchrdf.iloc[:,-num_annots:]
+                    annotdf.to_parquet(annot_output_prefix+chrom+'.parquet',engine='pyarrow')
     return 
 
 def match_ref(ref_prefix, ref_suffix, file_prefix, file_suffix, output_prefix, output_suffix, recompute):
@@ -163,6 +172,17 @@ def discretize(fname,col_name,threshold,output_fname):
     else:
         df = pd.read_csv(fname,delim_whitespace=True)
     df['label'] = np.where(df['pip']>=threshold,1.0,0.0)
+    label1 = df[df['label']==1.0].shape[0]
+    total = df.shape[0]
+    print('Number of label 1 is ',label1)
+    print('Total number of data is ',total)
+    if total!=0:
+        prop = float(label1)/float(total)
+        print('Proportion of label 1 is ',prop)
+        if prop <= 0.01:
+            print('Warning, proportion of label 1 is less than 1%')
+    else:
+        print('Data length is 0')
     if 'NOT' in fname:
         df = df[['label']]
     if 'parquet' in output_fname:
@@ -200,8 +220,10 @@ if __name__=='__main__':
     parser.add_argument('--match-ref',action='store_true',help='Match SNP with reference file.')
     parser.add_argument('--discretize',action='store_true',help='Discretize continuous variable.')
     parser.add_argument('--three-bins',action='store_true',help='Used along with --discretize flag. Put continuous values in three bins defined by [0.0,0.1,0.25,1.1]. Input continuous values must be in [0,1]')
+    parser.add_argument('--keep-info',action='store_true',help='Keeping SNP info columns')
     parser.add_argument('--target-prefix',help='Regression target files prefix, chromosome seperated.')
     parser.add_argument('--annot-prefix',help='Annotation files prefix, chromosome seperated.')
+    parser.add_argument('--annot-suffix')
     parser.add_argument('--annot-ref-prefix',help='Provide rsid files prefix if annotation files do not have info columns.')
     parser.add_argument('--target-output-prefix',help='Output target files prefix after matching SNPs between target files and annotation files.')
     parser.add_argument('--annot-output-prefix',help='Output annotation files prefix after matching SNPs between target files and annotation files.')
@@ -217,12 +239,13 @@ if __name__=='__main__':
     parser.add_argument('--input-file',help='Input file name.')
     parser.add_argument('--output-file',help='Output file name.')
     parser.add_argument('--threshold',type=float,help='Threshold for discretizing continuous variable.')
+    parser.add_argument('--chrom')
     args = parser.parse_args()
 
     if args.match_snps:
-        match_snps(args.target_prefix,args.annot_prefix,args.annot_ref_prefix,args.target_output_prefix,args.annot_output_prefix,args.target_col_name,args.recompute)
+        match_snps(args.target_prefix,args.annot_prefix,args.annot_suffix,args.annot_ref_prefix,args.target_output_prefix,args.annot_output_prefix,args.target_col_name,args.chrom,args.recompute)
     elif args.leave_one_out:
-        leave_one_out(args.target_prefix,args.annot_prefix,args.target_output_prefix,args.annot_output_prefix,args.target_col_name,args.num_annots,args.recompute)
+        leave_one_out(args.target_prefix,args.annot_prefix,args.target_output_prefix,args.annot_output_prefix,args.target_col_name,args.num_annots,args.recompute,args.keep_info)
     elif args.match_ref:
         match_ref(args.ref_prefix,args.ref_suffix,args.file_prefix,args.file_suffix,args.output_prefix,args.output_suffix,args.recompute)
     elif args.discretize:
