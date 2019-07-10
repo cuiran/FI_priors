@@ -12,7 +12,10 @@ from binned_pred import *
 def binpred_no_confound(chrom,pip_file,num_bins,ypred_dir):
     # pip_file relevant columns: prob (pip) and v (SNP)
     pipdf = pd.read_csv(pip_file,delim_whitespace=True)
-    files = glob.glob(ypred_dir+'*pred'+chrom+'.*')
+    files = glob.glob(ypred_dir+'*pred'+chrom+'.'+chrom+'.ypred')
+    if len(files)!=21:
+        print('Number of ypred files doesn not match 21',len(files))
+        sys.exit(1)
     prefixes = list(set(['.'.join(x.split('.')[:-2])+'.' for x in files]))
     l = list()
     for f in prefixes:
