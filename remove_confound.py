@@ -51,7 +51,7 @@ def filelist(directory,chrom):
     if len(binlist)!=21:
         print('Number of files with binning chromosome '+chrom+' does not match 21', len(binlist))
         sys.exit(1)
-    predlist = glob.glob(directory+'*pred'+chrom+'.*.coef')
+    predlist = glob.glob(directory+'*pred'+chrom+'.coef')
     if len(predlist)!=21:
         print('Number of files with prediction chromosome '+chrom+' does not match 21', len(predlist))
         sys.exit(1)
