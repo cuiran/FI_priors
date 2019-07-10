@@ -57,7 +57,7 @@ def filelist(directory,chrom):
         sys.exit(1)
     return binlist+predlist
 
-def ypred_no_confound(pip_file,num_bins,annot_prefix,chrom,coef_dir,result_dir,conf_names):
+def ypred_no_confound(annot_prefix,chrom,coef_dir,result_dir,conf_names):
     # annot_prefix is the prefix to the annotation files with '.' included
     # conf_names is the names of the confounding annotations
     print('reading in annotation for chromosome '+chrom)
