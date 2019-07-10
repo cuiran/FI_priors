@@ -101,6 +101,12 @@ if __name__=='__main__':
     parser.add_argument('--compute-ypred',action='store_true')
     args = parser.parse_args()
 
+    print('assign list of confoundings to conf_names'
     conf_names = ['MAFbin_lowfreq_1', 'MAFbin_lowfreq_2', 'MAFbin_lowfreq_3', 'MAFbin_lowfreq_4', 'MAFbin_lowfreq_5', 'MAFbin_lowfreq_6', 'MAFbin_lowfreq_7', 'MAFbin_lowfreq_8', 'MAFbin_lowfreq_9', 'MAFbin_lowfreq_10', 'MAFbin_frequent_1', 'MAFbin_frequent_2', 'MAFbin_frequent_3', 'MAFbin_frequent_4', 'MAFbin_frequent_5', 'MAFbin_frequent_6', 'MAFbin_frequent_7', 'MAFbin_frequent_8', 'MAFbin_frequent_9', 'MAFbin_frequent_10', 'MAF_Adj_Predicted_Allele_Age_common', 'MAF_Adj_LLD_AFR_lowfreq', 'MAF_Adj_LLD_AFR_common', 'MAF_Adj_ASMC_lowfreq', 'MAF_Adj_ASMC_common']
     if args.compute_ypred:
+        print('Compute ypred without MAF and LD confoundings')
+        print('Annot prefix',args.annot_prefix)
+        print('chrom', args.chrom)
+        print('coefficient directory',args.coef_dir)
+        print('result directory',args.result_dir)
         ypred_no_confound(args.annot_prefix,args.chrom,args.coef_dir,args.result_dir,conf_names)
