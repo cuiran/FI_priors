@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import pandas as pd
 import numpy as np
 import argparse
@@ -45,11 +47,11 @@ def filelist(directory,chrom):
     # get all the file names with the chrom as a binning or prediction chromosome
     # check the length of each set of files should be 21
     # output one list of 42 file names
-    binlist = glob.glob(directory+'*bin'+chrom+'_*')
+    binlist = glob.glob(directory+'*bin'+chrom+'_*.coef')
     if len(binlist)!=21:
         print('Number of files with binning chromosome '+chrom+' does not match 21', len(binlist))
         sys.exit(1)
-    predlist = glob.glob(directory+'*pred'+chrom+'.*')
+    predlist = glob.glob(directory+'*pred'+chrom+'.*.coef')
     if len(predlist)!=21:
         print('Number of files with prediction chromosome '+chrom+' does not match 21', len(predlist))
         sys.exit(1)
@@ -93,10 +95,10 @@ def dotprod(snplist,annot_noconf,coef_noconf):
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--chrom',type=str)
-    parser.add_argument('--coef_dir')
-    parser.add_argument('--result_dir')
-    parser.add_argument('--annot_prefix')
-    parser.add_argument('--compute_ypred',action='store_true')
+    parser.add_argument('--coef-dir')
+    parser.add_argument('--result-dir')
+    parser.add_argument('--annot-prefix')
+    parser.add_argument('--compute-ypred',action='store_true')
     args = parser.parse_args()
 
     conf_names = ['MAFbin_lowfreq_1', 'MAFbin_lowfreq_2', 'MAFbin_lowfreq_3', 'MAFbin_lowfreq_4', 'MAFbin_lowfreq_5', 'MAFbin_lowfreq_6', 'MAFbin_lowfreq_7', 'MAFbin_lowfreq_8', 'MAFbin_lowfreq_9', 'MAFbin_lowfreq_10', 'MAFbin_frequent_1', 'MAFbin_frequent_2', 'MAFbin_frequent_3', 'MAFbin_frequent_4', 'MAFbin_frequent_5', 'MAFbin_frequent_6', 'MAFbin_frequent_7', 'MAFbin_frequent_8', 'MAFbin_frequent_9', 'MAFbin_frequent_10', 'MAF_Adj_Predicted_Allele_Age_common', 'MAF_Adj_LLD_AFR_lowfreq', 'MAF_Adj_LLD_AFR_common', 'MAF_Adj_ASMC_lowfreq', 'MAF_Adj_ASMC_common']
