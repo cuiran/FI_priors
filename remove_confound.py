@@ -48,7 +48,6 @@ def binpred_no_confound(chrom,pip_file,num_bins,ypred_dir):
     meanbinpreddf = pd.DataFrame(data=None)
     meanbinpreddf['SNP'] = ypreddf['SNP']
     meanbinpreddf['mean_binpred'] = meanbinpred
-    pdb.set_trace()
     fnameprefix = '_'.join(f.split('_')[:-2])
     fname = fnameprefix+'_pred'+chrom+'.'+str(num_bins)+'bins.meanbinpred'
     meanbinpreddf.to_csv(fname,sep='\t',index=False)
