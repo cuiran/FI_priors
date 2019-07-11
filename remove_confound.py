@@ -117,11 +117,13 @@ if __name__=='__main__':
     parser.add_argument('--pip-file')
     parser.add_argument('--num-bins',type=int)
     parser.add_argument('--ypred-dir')
+    parser.add_argument('--BLD',action='store_true')
     args = parser.parse_args()
 
     print('assign list of confoundings to conf_names')
 
-    conf_names = ['MAFbin_lowfreq_1', 'MAFbin_lowfreq_2', 'MAFbin_lowfreq_3', 'MAFbin_lowfreq_4', 'MAFbin_lowfreq_5', 'MAFbin_lowfreq_6', 'MAFbin_lowfreq_7', 'MAFbin_lowfreq_8', 'MAFbin_lowfreq_9', 'MAFbin_lowfreq_10', 'MAFbin_frequent_1', 'MAFbin_frequent_2', 'MAFbin_frequent_3', 'MAFbin_frequent_4', 'MAFbin_frequent_5', 'MAFbin_frequent_6', 'MAFbin_frequent_7', 'MAFbin_frequent_8', 'MAFbin_frequent_9', 'MAFbin_frequent_10', 'MAF_Adj_Predicted_Allele_Age_common', 'MAF_Adj_LLD_AFR_lowfreq', 'MAF_Adj_LLD_AFR_common', 'MAF_Adj_ASMC_lowfreq', 'MAF_Adj_ASMC_common']
+    conf_names_BLF = ['MAFbin_lowfreq_1', 'MAFbin_lowfreq_2', 'MAFbin_lowfreq_3', 'MAFbin_lowfreq_4', 'MAFbin_lowfreq_5', 'MAFbin_lowfreq_6', 'MAFbin_lowfreq_7', 'MAFbin_lowfreq_8', 'MAFbin_lowfreq_9', 'MAFbin_lowfreq_10', 'MAFbin_frequent_1', 'MAFbin_frequent_2', 'MAFbin_frequent_3', 'MAFbin_frequent_4', 'MAFbin_frequent_5', 'MAFbin_frequent_6', 'MAFbin_frequent_7', 'MAFbin_frequent_8', 'MAFbin_frequent_9', 'MAFbin_frequent_10', 'MAF_Adj_Predicted_Allele_Age_common', 'MAF_Adj_LLD_AFR_lowfreq', 'MAF_Adj_LLD_AFR_common', 'MAF_Adj_ASMC_lowfreq', 'MAF_Adj_ASMC_common']
+    conf_names_BLD = ['MAFbin1', 'MAFbin2', 'MAFbin3', 'MAFbin4', 'MAFbin5', 'MAFbin6', 'MAFbin7', 'MAFbin8', 'MAFbin9', 'MAFbin10', 'MAF_Adj_Predicted_Allele_Age', 'MAF_Adj_LLD_AFR', 'MAF_Adj_ASMC']
 
     if args.compute_ypred:
         print('Compute ypred without MAF and LD confoundings')
@@ -129,7 +131,10 @@ if __name__=='__main__':
         print('chrom', args.chrom)
         print('coefficient directory',args.coef_dir)
         print('result directory',args.result_dir)
-        ypred_no_confound(args.annot_prefix,args.chrom,args.coef_dir,args.result_dir,conf_names)
+        if args.BLD:
+            ypred_no_confound(args.annot_prefix,args.chrom,args.coef_dir,args.result_dir,conf_names_BLD)
+        else:
+            ypred_no_confound(args.annot_prefix,args.chrom,args.coef_dir,args.result_dir,conf_names_BLF)
     elif args.compute_binpred:
         print('Computing binpred without MAF and LD confoundings')
         print('chrom: '+args.chrom)
