@@ -12,18 +12,18 @@ from binned_pred import *
 def binpred_no_confound(chrom,pip_file,num_bins,ypred_dir):
     # pip_file relevant columns: prob (pip) and v (SNP)
     pipdf = pd.read_csv(pip_file,delim_whitespace=True)
-    files = glob.glob(ypred_dir+'*pred'+chrom+'.'+chrom+'.ypred')
-    if len(files)!=21:
-        print('Number of ypred files doesn not match 21',len(files))
+    files = glob.glob(ypred_dir+'*pred'+chrom+'.*.ypred')
+    if len(files)!=42:
+        print('Number of ypred files doesn not match 42',len(files))
         sys.exit(1)
     prefixes = list(set(['.'.join(x.split('.')[:-2])+'.' for x in files]))
     l = list()
     for f in prefixes:
-        binchrom = re.search('bin(.*)_').group(1)
+        binchrom = re.search('_bin(.*)_',f).group(1)
         binypreddf = pd.read_csv(f+binchrom+'.ypred',delim_whitespace=True)
         ypreddf = pd.read_csv(f+chrom+'.ypred',delim_whitespace=True)
-        pipdfchr = pipdf[pipdf['chromosome']==str(binchrom)]
-        merged = pd.merge(pipdfchr[['v','prob']],ypreddf,left_on='v',right_on='SNP')
+        pipdfchr = pipdf[pipdf['chromosome']==int(binchrom)]
+        merged = pd.merge(pipdfchr[['v','prob']],binypreddf,left_on='v',right_on='SNP')
         ybin_stdized = min_max_scale(merged['YPRED'].values)
         ypred_stdized = min_max_scale(ypreddf['YPRED'].values)
         merged['YPRED_stdized'] = ybin_stdized
@@ -70,6 +70,9 @@ def ypred_no_confound(annot_prefix,chrom,coef_dir,result_dir,conf_names):
     annot_names = [x for x in col_names if x not in info_cols]
     keep = [x for x in col_names if x not in conf_names+info_cols]
     annot_noconf = annot_df.loc[:,keep]
+    # fill nan with 0 (theres a bug in creating the baselineLF.22.annot.gz code that's unsolved)
+    if chrom == '22':
+        annot_noconf.fillna(0,inplace=True)
     coef_list = filelist(coef_dir,chrom)
     for f in coef_list:
         print('processing file '+f)
@@ -102,6 +105,10 @@ if __name__=='__main__':
     parser.add_argument('--result-dir')
     parser.add_argument('--annot-prefix')
     parser.add_argument('--compute-ypred',action='store_true')
+    parser.add_argument('--compute-binpred',action='store_true')
+    parser.add_argument('--pip-file')
+    parser.add_argument('--num-bins',type=int)
+    parser.add_argument('--ypred-dir')
     args = parser.parse_args()
 
     print('assign list of confoundings to conf_names')
@@ -115,3 +122,10 @@ if __name__=='__main__':
         print('coefficient directory',args.coef_dir)
         print('result directory',args.result_dir)
         ypred_no_confound(args.annot_prefix,args.chrom,args.coef_dir,args.result_dir,conf_names)
+    elif args.compute_binpred:
+        print('Computing binpred without MAF and LD confoundings')
+        print('chrom: '+args.chrom)
+        print('pip file: '+args.pip_file)
+        print('number of bins: '+str(args.num_bins))
+        print('ypred directory: '+str(args.ypred_dir))
+        binpred_no_confound(args.chrom,args.pip_file,args.num_bins,args.ypred_dir)
