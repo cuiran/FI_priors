@@ -12,21 +12,25 @@ from binned_pred import *
 def binpred_no_confound(chrom,pip_file,num_bins,ypred_dir):
     # pip_file relevant columns: prob (pip) and v (SNP)
     pipdf = pd.read_csv(pip_file,delim_whitespace=True)
-    files = glob.glob(ypred_dir+'*pred'+chrom+'.*.ypred')
-    if len(files)!=42:
-        print('Number of ypred files doesn not match 42',len(files))
+    files = glob.glob(ypred_dir+'*pred'+chrom+'.'+chrom+'.ypred')
+    if len(files)!=21:
+        print('Number of ypred files doesn not match 21',len(files))
         sys.exit(1)
-    prefixes = list(set(['.'.join(x.split('.')[:-2])+'.' for x in files]))
+    prefixes = ['.'.join(x.split('.')[:-2])+'.' for x in files]
     l = list()
     for f in prefixes:
         binchrom = re.search('_bin(.*)_',f).group(1)
-        binypreddf = pd.read_csv(f+binchrom+'.ypred',delim_whitespace=True)
-        ypreddf = pd.read_csv(f+chrom+'.ypred',delim_whitespace=True)
+        print('Computing binned predictions with binning chromosome '+binchrom)
         pipdfchr = pipdf[pipdf['chromosome']==int(binchrom)]
+        if len(pipdfchr)==0:
+            print('No PIP information for chromosome '+binchrom)
+            continue
+        ypreddf = pd.read_csv(f+chrom+'.ypred',delim_whitespace=True)
+        binypreddf = pd.read_csv(f+binchrom+'.ypred',delim_whitespace=True)
         merged = pd.merge(pipdfchr[['v','prob']],binypreddf,left_on='v',right_on='SNP')
         ybin_stdized = min_max_scale(merged['YPRED'].values)
         ypred_stdized = min_max_scale(ypreddf['YPRED'].values)
-        merged['YPRED_stdized'] = ybin_stdized
+        merged[binchrom] = ybin_stdized
         ypreddf[chrom] = ypred_stdized
         print('Calculating predictions in bins for binning chromosome '+binchrom)
         bin_pred,cutoffs = get_bin_pred(merged,binchrom,num_bins,'prob','equally-sized')
@@ -35,14 +39,19 @@ def binpred_no_confound(chrom,pip_file,num_bins,ypred_dir):
         cutoffdf = pd.DataFrame(data=cutoffs,columns=['CUTOFF'])
         cutoffdf.to_csv(f+str(num_bins)+'bins.cutoffs',sep='\t',index=False)
         print('Applying binned predictions on chromosome '+chrom)
-        ypreddf[chrom+'_binpred'] = ypreddf.apply(lambda row:assign_binpred(row,pred_chrom,bin_pred,cutoffs),axis=1)
-        ypreddf.rename(columns={chrom:'ypred_stdized',chrom+'_binpred':'ybinpred'},inplace=True)
+        #ypreddf[str(chrom)+'_binpred'] = ypreddf.apply(lambda row:assign_binpred(row,chrom,bin_pred,cutoffs),axis=1)
+        ypreddf = assign_binpred2(ypreddf,chrom,bin_pred,cutoffs)
+        ypreddf.rename(columns={chrom:'ypred_stdized','binpred':'ybinpred'},inplace=True)
         ypreddf.to_csv(f+str(num_bins)+'bins.ybinpred',sep='\t',index=False)
         l.append(ypreddf['ybinpred'].tolist())
     meanbinpred = np.mean(np.array(l), axis=0)
-    meanbinpreddf = pd.DataFrame(data=meanbinpred,columns=['mean_binpred'])
+    meanbinpreddf = pd.DataFrame(data=None)
     meanbinpreddf['SNP'] = ypreddf['SNP']
-    meanbinpreddf.to_csv(f+str(num_bins)+'bins.meanbinpred',sep='\t',index=False)
+    meanbinpreddf['mean_binpred'] = meanbinpred
+    pdb.set_trace()
+    fnameprefix = '_'.join(f.split('_')[:-2])
+    fname = fnameprefix+'_pred'+chrom+'.'+str(num_bins)+'bins.meanbinpred'
+    meanbinpreddf.to_csv(fname,sep='\t',index=False)
     return
         
 

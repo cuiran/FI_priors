@@ -407,6 +407,18 @@ def assign_binpred(row,pred_chrom,bin_pred,cutoffs):
     if (row[pred_chrom]>=cutoffs[-2]) and (row[pred_chrom]<=cutoffs[-1]):
         return bin_pred[-1]
 
+def assign_binpred2(preddf,pred_chrom,bin_pred,cutoffs):
+    # preddf[pred_chrom] stores the standardized ranking, cutoffs should start with 0 and ends with 1
+    cutoffs_mod = cutoffs[:-1]+[1.1]
+    num_bins = len(cutoffs)-1
+    colnames = ['bin'+str(i) for i in range(1,num_bins+1)]
+    for i in range(1,num_bins+1):
+        preddf['bin'+str(i)] = ((preddf[pred_chrom]>=cutoffs_mod[i-1])&(preddf[pred_chrom]<cutoffs_mod[i])).astype(int)
+        preddf['bin'+str(i)] = preddf['bin'+str(i)]*bin_pred[i-1]
+    preddf['binpred'] = preddf[colnames].sum(axis=1)
+    preddf.drop(colnames,axis=1,inplace=True)
+    return preddf
+
 def make_training_files(xtrain_prefix,xtrain_suffix,ytrain_prefix,ytrain_suffix,output_prefix,pred_chrom,bin_chrom,num_annots,recompute):
     '''
     This function outputs file names for the training data.
