@@ -61,14 +61,13 @@ def binarize(df,cutoff):
     new_df = ddf['prob_binarized'].to_frame()
     return new_df
 
-def method_r2_score(method, X_train, y_train, X_test, y_test):
+def method_y_pred(method, X_train, y_train, X_test):
     print('Training {} predictor'.format(method))
     predictor = create_predictor(method)
     predictor.fit(X_train,y_train)
     print('Predicting with {} predictor'.format(method))
     y_pred = predict(method,predictor,X_test)
-    score = score_function(y_pred,y_test)
-    return score
+    return y_pred
 
 def predict(method,predictor,X_test):
     if method in ['ols','lasso','elnet','gbt','rf']:
@@ -108,11 +107,12 @@ def get_train_test(feature_dfs,target_dfs,skip_idx):
     y_test = y_test_df.values.reshape(-1)
     return X_train,y_train,X_test,y_test
 
-def score_all_methods(fm_fname,leave_chrom,annot_prefix,out):
+def run_method(method,fm_fname,leave_chrom,annot_prefix,out):
     '''
     fm_fname is fine-mapping results file name
     annot_prefix can have multiple annotations, they need to be comma delimited.
     The first annot_prefix must be the baseline
+    out is file prefix for output files, should include PHENO_ANNOTS_
     '''
     fm_df = pd.read_csv(fm_fname,delim_whitespace=True,dtype={'position':int,'chromosome':int})
     fm_df['v'] = fm_df['chromosome'].astype(str)+':'+fm_df['position'].astype(str)+':'+fm_df['allele1']+':'+fm_df['allele2']
@@ -121,13 +121,51 @@ def score_all_methods(fm_fname,leave_chrom,annot_prefix,out):
     print('Leaving chromosome {} out'.format(leave_chrom))
     skip_idx = int(leave_chrom)-1
     X_train,y_train,X_test,y_test = get_train_test(annot_dfs,fm_filt_dfs,skip_idx)
-    ols_score = method_r2_score('ols', X_train, y_train, X_test, y_test))
-    lasso_score = method_r2_score('lasso', X_train, y_train, X_test, y_test)
-    elnet_score = method_r2_score('elnet', X_train, y_train, X_test, y_test)
-    gbt_score = method_r2_score('gbt', X_train, y_train, X_test, y_test)
-    rf_score = method_r2_score('rf', X_train, y_train, X_test, y_test)
-    df = pd.DataFrame(None,columnns=['Method','R2_score'])
-    df['Method'] = ['ols','lasso','elnet','gbt','rf']
-    df['R2_score'] = [ols_score,lasso_score,elnet_score,gbt_score,rf_score]
-    df.to_csv(out+'.leave_'+leave_chrom+'.r2_score',sep='\t',index=False)
+    y_pred = method_y_pred(method,X_train,y_train,X_test)
+    pred_df = pd.DataFrame(None,columns=['YPRED','YTEST'])
+    pred_df['YPRED'] = y_pred
+    pred_df['YTEST'] = y_test
+    pred_df.to_csv(out+method+'_leave'+leave_chrom+'.ypred',sep='\t',index=False)
     return
+
+def get_annots_from_files(annot_prefix,fm_df):
+    '''
+    annot_prefix can have multiple annotations, they need to be comma delimited.
+    The first annot_prefix must be the baseline
+
+    return two lists; first is a list of annotation dataframes one for each chromosome
+    second is a list of pip dataframes, one for each chromosome
+    '''
+    annot_df_list = [] # 22 lists of dfs
+    fm_df_list = []
+    annot_prefix_list = annot_prefix.split(',')
+    for i in range(1,23):
+        chrom = str(i)
+        a_fname = a_prefix+chrom+'.annot.gz'
+        chr_annot_df_list = []
+        for a_prefix in annot_prefix_list:
+            if a_prefix == annot_prefix_list[0]:
+                a_df,f_df = read_annot_fm(a_fname,fm_df)
+                snp_list = f_df.index.tolist()
+                chr_annot_df_list.append(a_df)
+                fm_df_list.append(f_df)
+            else:
+                a_df = read_annot(a_fname,snp_list)
+                chr_annot_df_list.append(a_df)
+        chr_annot_df = pd.concat(chr_annot_df_list,axis=1)
+    annot_df_list.append(chr_annot_df)
+    return
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--method',help='ols,lasso,elnet,gbt,rf')
+    parser.add_argument('--fm-fname',help='fine-mapping result file name')
+    parser.add_argument('--leave-chr',type=str,help='test chromosome')
+    parser.add_argument('--annot-prefix',help='comma delimited prefixes')
+    parser.add_argument('--out',help='output prefix of the form PHENO_ANNOT_')
+    args = parser.parse_args()
+
+    run_method(args.method,args.fm_fname,args.leave_chr,args.annot_prefix,args.out)
+
+    
