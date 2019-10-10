@@ -20,6 +20,7 @@ def read_annot(fname,snplist):
     snplist is a list of SNP ID's
     annotation corresponds to fname must contain all SNPs in snplist
     '''
+    print('Reading annotations for {}'.format(fname.split('/')[-1]))
     snp_df = pd.read_csv(fname,delim_whitespace=True,usecols=['SNP'])
     shared_snps_idx = snp_df[snp_df['SNP'].isin(snplist)].index.tolist()
     print('There are {} fine-mapped SNPs that are also annotated'.format(len(shared_snps_idx)))
@@ -31,8 +32,7 @@ def read_annot(fname,snplist):
                        usecols=[i for i in cols if i not in ['CHR','BP','CM']],
                        skiprows = skip_idx)
     annot_snps = annot_df['SNP'].tolist()
-    annot_snps_sorted = sorted(annot_snps)
-    if annot_snps_sorted!=snplist:
+    if (annot_snps!=snplist) and (sorted(annot_snps)!=snplist):
         raise ValueError('SNPs in filtered dataframe does not match ones given')
     annot_df.set_index('SNP',inplace=True)
     return annot_df
@@ -101,6 +101,10 @@ def get_train_test(feature_dfs,target_dfs,skip_idx):
     y_train_df = pd.concat([target_dfs[i] for i in range(len(target_dfs)) if i!=skip_idx],axis=0)
     X_test_df = feature_dfs[skip_idx]
     y_test_df = target_dfs[skip_idx]
+    if X_train_df.index.tolist()!= y_train_df.index.tolist():
+        raise ValueError('Training SNPs does not match between features and target')
+    if X_test_df.index.tolist()!=y_test_df.index.tolist():
+        raise ValueError('Test SNPs does not match between features and target') 
     X_train = X_train_df.values
     y_train = y_train_df.values.reshape(-1)
     X_test = X_test_df.values
@@ -114,6 +118,7 @@ def run_method(method,fm_fname,leave_chrom,annot_prefix,out):
     The first annot_prefix must be the baseline
     out is file prefix for output files, should include PHENO_ANNOTS_
     '''
+    print('Reading in fine-mapping result for {}'.format(fm_fname.split('/')[-1]))
     fm_df = pd.read_csv(fm_fname,delim_whitespace=True,dtype={'position':int,'chromosome':int})
     fm_df['v'] = fm_df['chromosome'].astype(str)+':'+fm_df['position'].astype(str)+':'+fm_df['allele1']+':'+fm_df['allele2']
     fm_df.set_index('v',inplace=True)
@@ -122,7 +127,8 @@ def run_method(method,fm_fname,leave_chrom,annot_prefix,out):
     skip_idx = int(leave_chrom)-1
     X_train,y_train,X_test,y_test = get_train_test(annot_dfs,fm_filt_dfs,skip_idx)
     y_pred = method_y_pred(method,X_train,y_train,X_test)
-    pred_df = pd.DataFrame(None,columns=['YPRED','YTEST'])
+    pred_df = pd.DataFrame(None,columns=['SNP','YPRED','YTEST'])
+    pred_df['SNP'] = fm_filt_dfs[skip_idx].index.tolist()
     pred_df['YPRED'] = y_pred
     pred_df['YTEST'] = y_test
     pred_df.to_csv(out+method+'_leave'+leave_chrom+'.ypred',sep='\t',index=False)
@@ -141,9 +147,9 @@ def get_annots_from_files(annot_prefix,fm_df):
     annot_prefix_list = annot_prefix.split(',')
     for i in range(1,23):
         chrom = str(i)
-        a_fname = a_prefix+chrom+'.annot.gz'
         chr_annot_df_list = []
         for a_prefix in annot_prefix_list:
+            a_fname = a_prefix+chrom+'.annot.gz'
             if a_prefix == annot_prefix_list[0]:
                 a_df,f_df = read_annot_fm(a_fname,fm_df)
                 snp_list = f_df.index.tolist()
@@ -153,8 +159,8 @@ def get_annots_from_files(annot_prefix,fm_df):
                 a_df = read_annot(a_fname,snp_list)
                 chr_annot_df_list.append(a_df)
         chr_annot_df = pd.concat(chr_annot_df_list,axis=1)
-    annot_df_list.append(chr_annot_df)
-    return
+        annot_df_list.append(chr_annot_df)
+    return annot_df_list,fm_df_list
 
 
 if __name__ == '__main__':
