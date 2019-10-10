@@ -108,5 +108,26 @@ def get_train_test(feature_dfs,target_dfs,skip_idx):
     y_test = y_test_df.values.reshape(-1)
     return X_train,y_train,X_test,y_test
 
-def score_all_methods(fm_fname,leave_chrom,annot_prefix):
-
+def score_all_methods(fm_fname,leave_chrom,annot_prefix,out):
+    '''
+    fm_fname is fine-mapping results file name
+    annot_prefix can have multiple annotations, they need to be comma delimited.
+    The first annot_prefix must be the baseline
+    '''
+    fm_df = pd.read_csv(fm_fname,delim_whitespace=True,dtype={'position':int,'chromosome':int})
+    fm_df['v'] = fm_df['chromosome'].astype(str)+':'+fm_df['position'].astype(str)+':'+fm_df['allele1']+':'+fm_df['allele2']
+    fm_df.set_index('v',inplace=True)
+    annot_dfs,fm_filt_dfs = get_annots_from_files(annot_prefix,fm_df)
+    print('Leaving chromosome {} out'.format(leave_chrom))
+    skip_idx = int(leave_chrom)-1
+    X_train,y_train,X_test,y_test = get_train_test(annot_dfs,fm_filt_dfs,skip_idx)
+    ols_score = method_r2_score('ols', X_train, y_train, X_test, y_test))
+    lasso_score = method_r2_score('lasso', X_train, y_train, X_test, y_test)
+    elnet_score = method_r2_score('elnet', X_train, y_train, X_test, y_test)
+    gbt_score = method_r2_score('gbt', X_train, y_train, X_test, y_test)
+    rf_score = method_r2_score('rf', X_train, y_train, X_test, y_test)
+    df = pd.DataFrame(None,columnns=['Method','R2_score'])
+    df['Method'] = ['ols','lasso','elnet','gbt','rf']
+    df['R2_score'] = [ols_score,lasso_score,elnet_score,gbt_score,rf_score]
+    df.to_csv(out+'.leave_'+leave_chrom+'.r2_score',sep='\t',index=False)
+    return
