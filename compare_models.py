@@ -69,8 +69,7 @@ def method_y_pred(method, X_train, y_train, X_test):
     return y_pred
 
 def predict(method,predictor,X_test):
-    if method in ['ols','lasso','elnet','gbt','rf']:
-        y_pred = predictor.predict(X_test)
+    y_pred = predictor.predict(X_test)
     return y_pred
 
 def create_predictor(method):
@@ -79,6 +78,7 @@ def create_predictor(method):
     elnet = linear_model.ElasticNetCV(l1_ratio = [.01, .1, .3, .5, .7, .9, .95, .99, 1],cv=5)
     gbt = ensemble.GradientBoostingRegressor(n_estimators=50,max_depth=2)
     rf = ensemble.RandomForestRegressor(max_depth=2, random_state=0,n_estimators=50) 
+    ridge = linear_model.RidgeCV(alphas=[1e-2, 1e-1, 1,3,5,10,20],cv=5,fit_intercept=False)
     
     if method=='ols':
         return ols
@@ -90,6 +90,8 @@ def create_predictor(method):
         return gbt
     elif method=='rf':
         return rf
+    elif method=='ridge':
+        return ridge
 
 def score_function(y_pred,y_test):
     score = metrics.r2_score(y_test,y_pred)
