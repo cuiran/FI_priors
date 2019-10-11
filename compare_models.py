@@ -77,8 +77,8 @@ def create_predictor(method):
     ols = linear_model.LinearRegression(fit_intercept=False)
     lasso = linear_model.LassoCV(cv=5,fit_intercept=False)
     elnet = linear_model.ElasticNetCV(l1_ratio = [.01, .1, .3, .5, .7, .9, .95, .99, 1],cv=5)
-    gbt = ensemble.GradientBoostingRegressor(n_estimators=1000,max_depth=2)
-    rf = ensemble.RandomForestRegressor(max_depth=2, random_state=0,n_estimators=1000) 
+    gbt = ensemble.GradientBoostingRegressor(n_estimators=50,max_depth=2)
+    rf = ensemble.RandomForestRegressor(max_depth=2, random_state=0,n_estimators=50) 
     
     if method=='ols':
         return ols
